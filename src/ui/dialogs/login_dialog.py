@@ -9,7 +9,7 @@ Admins can create additional users.
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QCheckBox, QTabWidget, QWidget,
-    QScrollArea, QApplication, QInputDialog
+    QScrollArea, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QIcon
@@ -176,15 +176,6 @@ class LoginDialog(FramelessDialog):
 
         self._login_user.setFocus()
 
-        self._single_btn = QPushButton(tr("login.enable_single"))
-        self._single_btn.setObjectName("secondaryBtn")
-        self._single_btn.clicked.connect(self._enable_single_mode)
-        layout.addWidget(self._single_btn)
-        self._single_notice = QLabel()
-        self._single_notice.setObjectName("hintLabel")
-        self._single_notice.setWordWrap(True)
-        layout.addWidget(self._single_notice)
-        self._refresh_single_mode_controls()
 
     def _build_register_form(self, layout: QVBoxLayout):
         for attr, lbl, ph, pw in [
@@ -220,7 +211,12 @@ class LoginDialog(FramelessDialog):
         self._single_notice.setObjectName("hintLabel")
         self._single_notice.setWordWrap(True)
         layout.addWidget(self._single_notice)
-        self._refresh_single_mode_controls()
+        self._single_btn.setEnabled(is_keyring_available())
+        self._single_notice.setText(
+            tr("login.single_hint")
+            if is_keyring_available()
+            else tr("login.single_unavailable_keyring")
+        )
 
         self._reg_user.setFocus()
 
@@ -231,35 +227,6 @@ class LoginDialog(FramelessDialog):
     def _update_login_btn_state(self):
         enabled = bool(self._login_user.text().strip()) and bool(self._login_pw.text())
         self._login_btn.setEnabled(enabled)
-
-    def _refresh_single_mode_controls(self):
-        available = is_keyring_available() and (
-            not AuthManager.has_any_users() or AuthManager.can_enable_single_user_mode()
-        )
-        self._single_btn.setEnabled(available)
-        if not is_keyring_available():
-            self._single_notice.setText(tr("login.single_unavailable_keyring"))
-        elif AuthManager.has_any_users() and not AuthManager.can_enable_single_user_mode():
-            self._single_notice.setText(tr("login.single_unavailable_users"))
-        else:
-            self._single_notice.setText(tr("login.single_hint"))
-
-    def _enable_single_mode(self):
-        username, ok = QInputDialog.getText(self, tr("login.single_title"),
-                                            tr("login.single_username"))
-        if not ok:
-            return
-        password, ok = QInputDialog.getText(self, tr("login.single_title"),
-                                            tr("login.single_password"),
-                                            QLineEdit.EchoMode.Password)
-        if not ok:
-            return
-        try:
-            user = AuthManager.enable_single_user_mode(username, password)
-            Session.login(user)
-            self.accept()
-        except Exception as exc:
-            self._single_notice.setText(f"⚠ {exc}")
 
     def _initial_single_setup(self):
         try:

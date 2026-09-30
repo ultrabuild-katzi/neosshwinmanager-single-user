@@ -2219,6 +2219,11 @@ class MainWindow(FramelessMainWindow):
         columns = QHBoxLayout()
         columns.setSpacing(16)
 
+        if AuthManager.single_user_mode_enabled():
+            v.addStretch()
+            self._fs_layout.addWidget(body, stretch=1)
+            return
+
         list_card, list_layout = _section_card(tr("users.section.users"), current_username)
 
         for u in users:
@@ -2362,20 +2367,10 @@ class MainWindow(FramelessMainWindow):
 
     def _enable_single_user_from_users(self):
         from src.auth_manager import AuthManager
-        username, ok = QInputDialog.getText(
-            self, tr("users.mode.title"), tr("login.single_username")
-        )
-        if not ok:
-            return
-        password, ok = QInputDialog.getText(
-            self, tr("users.mode.title"), tr("login.single_password"),
-            QLineEdit.EchoMode.Password,
-        )
-        if not ok:
-            return
         try:
-            user = AuthManager.enable_single_user_mode(username, password)
-            Session.login(user)
+            user = AuthManager.enable_single_user_mode_from_session()
+            self._user = user
+            self._mgr = UserConnectionManager(user)
             self._open_users_panel()
         except Exception as exc:
             self._set_status(str(exc))

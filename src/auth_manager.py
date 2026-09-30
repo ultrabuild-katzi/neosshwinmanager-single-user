@@ -354,6 +354,45 @@ class AuthManager:
         return user
 
     @classmethod
+    def enable_single_user_mode_from_session(cls) -> AppUser:
+        """Switch the current single-account setup to automatic ``default`` login."""
+        if not is_keyring_available():
+            raise RuntimeError("Windows Credential Manager is unavailable.")
+        current = Session.current()
+        if not current or not current.is_admin or not current.enc_key:
+            raise RuntimeError("An authenticated administrator session is required.")
+        with get_connection() as conn:
+            count = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+            row = conn.execute("SELECT id FROM users WHERE id=?", (current.id,)).fetchone()
+        if count != 1 or not row:
+            raise RuntimeError("Single-user mode requires exactly one existing user.")
+
+        import secrets
+        password = secrets.token_urlsafe(32)
+        pw_hash, salt = hash_password(password)
+        enc_key_enc, enc_key_iv = encrypt_key(
+            current.enc_key, password, salt, kdf="argon2"
+        )
+        if not store_key_in_credential_manager(password, cls._SINGLE_CREDENTIAL):
+            raise RuntimeError("Windows Credential Manager is unavailable.")
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    """UPDATE users SET username='default', pw_hash=?, pw_salt=?,
+                       enc_key_enc=?, enc_key_iv=?, enc_key_kdf='argon2',
+                       is_admin=1 WHERE id=?""",
+                    (pw_hash, salt, enc_key_enc, enc_key_iv, current.id),
+                )
+                conn.execute("UPDATE application_mode SET single_user=1 WHERE id=1")
+        except Exception:
+            from src.crypto import delete_key_from_credential_manager
+            delete_key_from_credential_manager(cls._SINGLE_CREDENTIAL)
+            raise
+        user = AppUser(current.id, "default", True, current.enc_key)
+        Session.login(user)
+        return user
+
+    @classmethod
     def initialize_single_user_mode(cls) -> AppUser:
         """Create the hidden default administrator for first-run setup."""
         if not cls.can_enable_single_user_mode() or cls.has_any_users():

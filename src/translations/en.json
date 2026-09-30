@@ -195,7 +195,7 @@
   "login.single_password": "New password (at least 8 characters):",
   "login.single_hint": "Stores the app password in Windows Credential Manager and signs in automatically.",
   "login.single_unavailable_keyring": "Single-user mode is disabled: Windows Credential Manager/keyring is unavailable.",
-  "login.single_unavailable_users": "Single-user mode is disabled: it requires zero or one existing user.",
+  "login.single_unavailable_users": "Single-user mode is unavailable: there must only be one user.",
   "users.title": "User Management",
   "users.section.users": "USERS",
   "users.section.new": "CREATE NEW USER",

@@ -359,9 +359,16 @@ def main():
                 logger.debug(f"Auto-Login deaktiviert für '{windows_user}'")
 
     # ── 4. Login / Registration ──────────────────────────────────
-    login_dlg = LoginDialog()
-    if login_dlg.exec() != LoginDialog.DialogCode.Accepted:
-        sys.exit(0)
+    # Single-user mode keeps its plaintext app password in Windows Credential
+    # Manager and therefore needs no interactive login.
+    from src.auth_manager import AuthManager
+    single_user = AuthManager.authenticate_single_user()
+    if single_user:
+        Session.login(single_user)
+    else:
+        login_dlg = LoginDialog()
+        if login_dlg.exec() != LoginDialog.DialogCode.Accepted:
+            sys.exit(0)
 
     if not Session.is_logged_in():
         sys.exit(0)

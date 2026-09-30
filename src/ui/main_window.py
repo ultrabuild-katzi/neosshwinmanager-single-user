@@ -2115,6 +2115,7 @@ class MainWindow(FramelessMainWindow):
     def _build_users_form(self):
         from src.auth_manager import AuthManager
         from src.database import get_connection
+        from src.crypto import is_keyring_available
 
         users = AuthManager.list_users()
         current_user = Session.current()
@@ -2181,6 +2182,39 @@ class MainWindow(FramelessMainWindow):
         )
         hero_l.addWidget(summary, 0, Qt.AlignmentFlag.AlignTop)
         v.addWidget(hero)
+
+        # Single-user mode can be left without losing the existing account
+        # data. The migration keeps the account id and encryption key intact.
+        if AuthManager.single_user_mode_enabled():
+            mode_card, mode_layout = _section_card(tr("users.mode.title"))
+            mode_layout.addWidget(QLabel(tr("users.mode.single_hint")))
+            mode_btn = QPushButton(tr("users.mode.enable_multi"))
+            mode_btn.setObjectName("secondaryBtn")
+            mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            mode_btn.clicked.connect(self._migrate_single_user_to_multi)
+            mode_layout.addWidget(mode_btn)
+            v.addWidget(mode_card)
+        elif not AuthManager.single_user_mode_enabled():
+            mode_card, mode_layout = _section_card(tr("users.mode.title"))
+            mode_layout.addWidget(QLabel(tr("users.mode.multi_hint")))
+            mode_btn = QPushButton(tr("users.mode.enable_single"))
+            mode_btn.setObjectName("secondaryBtn")
+            mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            keyring_available = is_keyring_available()
+            mode_btn.setEnabled(keyring_available and len(users) <= 1)
+            mode_btn.clicked.connect(self._enable_single_user_from_users)
+            mode_layout.addWidget(mode_btn)
+            if not keyring_available:
+                notice_text = tr("login.single_unavailable_keyring")
+            elif len(users) > 1:
+                notice_text = tr("login.single_unavailable_users")
+            else:
+                notice_text = tr("login.single_hint")
+            notice = QLabel(notice_text)
+            notice.setWordWrap(True)
+            notice.setObjectName("hintLabel")
+            mode_layout.addWidget(notice)
+            v.addWidget(mode_card)
 
         columns = QHBoxLayout()
         columns.setSpacing(16)
@@ -2305,6 +2339,46 @@ class MainWindow(FramelessMainWindow):
 
         v.addStretch()
         self._fs_layout.addWidget(body, stretch=1)
+
+    def _migrate_single_user_to_multi(self):
+        from src.auth_manager import AuthManager
+        username, ok = QInputDialog.getText(
+            self, tr("users.mode.title"), tr("login.single_username")
+        )
+        if not ok:
+            return
+        password, ok = QInputDialog.getText(
+            self, tr("users.mode.title"), tr("login.single_password"),
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok:
+            return
+        try:
+            self._user = AuthManager.migrate_single_user_to_multi_user(username, password)
+            self._mgr = UserConnectionManager(self._user)
+            self._open_users_panel()
+        except Exception as exc:
+            self._set_status(str(exc))
+
+    def _enable_single_user_from_users(self):
+        from src.auth_manager import AuthManager
+        username, ok = QInputDialog.getText(
+            self, tr("users.mode.title"), tr("login.single_username")
+        )
+        if not ok:
+            return
+        password, ok = QInputDialog.getText(
+            self, tr("users.mode.title"), tr("login.single_password"),
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok:
+            return
+        try:
+            user = AuthManager.enable_single_user_mode(username, password)
+            Session.login(user)
+            self._open_users_panel()
+        except Exception as exc:
+            self._set_status(str(exc))
 
     def _uf_add_user(self):
         from src.auth_manager import AuthManager
@@ -5575,4 +5649,3 @@ class MainWindow(FramelessMainWindow):
         if card:
             has_sessions = bool(self._terminal_conn_tabs.get(conn_id))
             card.set_terminal_active(has_sessions)
-

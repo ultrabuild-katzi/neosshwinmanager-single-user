@@ -273,7 +273,7 @@ class MainWindow(FramelessMainWindow):
         self._saving_in_progress = False
         self._shortcuts: list[QShortcut] = []
         self._explicit_quit = False
-        
+
         # Debug mode settings
         self._debug_mode = False  # Can be toggled via F2
 
@@ -1953,7 +1953,7 @@ class MainWindow(FramelessMainWindow):
 
         # User info card
         info_card, info_l = _section_card(tr("profile.user_info"), tr("profile.active"))
-        
+
         username_row = QWidget()
         username_h = QHBoxLayout(username_row)
         username_h.setContentsMargins(0, 0, 0, 0)
@@ -5267,11 +5267,11 @@ class MainWindow(FramelessMainWindow):
         """Debug the widget currently under the mouse cursor (triggered by F2)."""
         from PyQt6.QtWidgets import QApplication
         from PyQt6.QtGui import QCursor
-        
+
         # Get widget under mouse cursor using global cursor position
         cursor_pos = QCursor.pos()
         widget = QApplication.widgetAt(cursor_pos)
-        
+
         if widget:
             self._log_widget_debug_info(widget)
         else:
@@ -5296,23 +5296,23 @@ class MainWindow(FramelessMainWindow):
             'geometry': f"{widget.geometry().width()}x{widget.geometry().height()} at ({widget.geometry().x()}, {widget.geometry().y()})",
             'style_sheet': widget.styleSheet()[:100] + '...' if len(widget.styleSheet()) > 100 else widget.styleSheet()
         }
-        
+
         # Format debug message
         debug_msg = "=== DEBUG: Widget Under Mouse ===\n"
         for key, value in widget_info.items():
             debug_msg += f"{key.upper()}: {value}\n"
         debug_msg += "================================\n"
-        
+
         # Log to debug console
         print(debug_msg)
-        
+
         # Log to file logger
         logger.debug(debug_msg)
-        
+
         # Log to debug window if exists
         if hasattr(self, '_debug_window') and self._debug_window and not sip.isdeleted(self._debug_window):
             self._debug_window.append_log(debug_msg)
-        
+
         # Log to statusbar
         status_msg = f"DEBUG: {widget_info['widget_type']} | {widget_info['object_name'] or 'No Name'} | {widget_info['text'][:30] if widget_info['text'] != 'N/A' else 'N/A'}"
         if hasattr(self, 'statusBar') and self.statusBar():
@@ -5643,4 +5643,3 @@ class MainWindow(FramelessMainWindow):
         if card:
             has_sessions = bool(self._terminal_conn_tabs.get(conn_id))
             card.set_terminal_active(has_sessions)
-

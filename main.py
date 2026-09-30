@@ -135,10 +135,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QIcon
 
 from src.ui.theme import STYLESHEET, get_stylesheet
-from src.ui.main_window import MainWindow
 from src.database import init_db
-from src.ui.dialogs.login_dialog import LoginDialog
-from src.auth_manager import Session
 from src.i18n import tr
 from src.channel import display_name
 
@@ -361,7 +358,10 @@ def main():
     # ── 4. Login / Registration ──────────────────────────────────
     # Single-user mode keeps its plaintext app password in Windows Credential
     # Manager and therefore needs no interactive login.
-    from src.auth_manager import AuthManager
+    # AuthManager loads persistent login-attempt state on import. Keep that
+    # database work after schema initialization and permission repair.
+    from src.auth_manager import AuthManager, Session
+    from src.ui.dialogs.login_dialog import LoginDialog
     single_user = AuthManager.authenticate_single_user()
     if single_user:
         Session.login(single_user)
@@ -466,6 +466,9 @@ def main():
 
     try:
         # Create and show main window (maximiert mit Titelleiste)
+        # Defer this large UI import until authentication and user settings
+        # have completed.
+        from src.ui.main_window import MainWindow
         window = MainWindow()
         window.showMaximized()
 

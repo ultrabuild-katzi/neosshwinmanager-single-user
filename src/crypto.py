@@ -109,24 +109,24 @@ def derive_key_argon2(password: SecureBytes, salt: Optional[bytes] = None) -> Tu
     """
     Derive an encryption key using Argon2id (memory-hard function).
     More secure against GPU/ASIC attacks than PBKDF2.
-    
+
     Args:
         password: The master password as SecureBytes
         salt: Optional salt (generated if not provided)
-        
+
     Returns:
         Tuple of (derived_key, salt)
     """
     if not _CRYPTO_AVAILABLE:
         raise RuntimeError("cryptography nicht installiert.")
-    
+
     if salt is None:
         salt = secrets.token_bytes(32)
-    
+
     password_bytes = password.get_bytes()
     if password_bytes is None:
         raise ValueError("Password cannot be empty")
-    
+
     kdf = Argon2id(
         salt=salt,
         length=_KEY_LEN,
@@ -135,7 +135,7 @@ def derive_key_argon2(password: SecureBytes, salt: Optional[bytes] = None) -> Tu
         memory_cost=_ARGON2_MEMORY_COST,
     )
     key = kdf.derive(password_bytes)
-    
+
     return key, salt
 
 
@@ -143,24 +143,24 @@ def derive_key_pbkdf2_secure(password: SecureBytes, salt: Optional[bytes] = None
     """
     Derive an encryption key from a password using PBKDF2-HMAC-SHA256.
     Secure version that uses SecureBytes for password handling.
-    
+
     Args:
         password: The master password as SecureBytes
         salt: Optional salt (generated if not provided)
-        
+
     Returns:
         Tuple of (derived_key, salt)
     """
     if not _CRYPTO_AVAILABLE:
         raise RuntimeError("cryptography nicht installiert.")
-    
+
     if salt is None:
         salt = secrets.token_bytes(32)
-    
+
     password_bytes = password.get_bytes()
     if password_bytes is None:
         raise ValueError("Password cannot be empty")
-    
+
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=_KEY_LEN,
@@ -169,7 +169,7 @@ def derive_key_pbkdf2_secure(password: SecureBytes, salt: Optional[bytes] = None
         backend=default_backend()
     )
     key = kdf.derive(password_bytes)
-    
+
     return key, salt
 
 
@@ -181,17 +181,17 @@ def store_key_in_credential_manager(key_hex: str, username: str = _KEYRING_USERN
     """
     Store the encryption key in Windows Credential Manager.
     More secure than storing in the database.
-    
+
     Args:
         key_hex: The encryption key as hex string
         username: The credential username
-        
+
     Returns:
         True if successful, False otherwise
     """
     if not _KEYRING_AVAILABLE:
         return False
-    
+
     try:
         keyring.set_password(_KEYRING_SERVICE, username, key_hex)
         return True
@@ -202,16 +202,16 @@ def store_key_in_credential_manager(key_hex: str, username: str = _KEYRING_USERN
 def retrieve_key_from_credential_manager(username: str = _KEYRING_USERNAME) -> Optional[str]:
     """
     Retrieve the encryption key from Windows Credential Manager.
-    
+
     Args:
         username: The credential username
-        
+
     Returns:
         The key as hex string, or None if not found
     """
     if not _KEYRING_AVAILABLE:
         return None
-    
+
     try:
         return keyring.get_password(_KEYRING_SERVICE, username)
     except Exception:
@@ -221,16 +221,16 @@ def retrieve_key_from_credential_manager(username: str = _KEYRING_USERNAME) -> O
 def delete_key_from_credential_manager(username: str = _KEYRING_USERNAME) -> bool:
     """
     Delete the encryption key from Windows Credential Manager.
-    
+
     Args:
         username: The credential username
-        
+
     Returns:
         True if successful, False otherwise
     """
     if not _KEYRING_AVAILABLE:
         return False
-    
+
     try:
         keyring.delete_password(_KEYRING_SERVICE, username)
         return True
@@ -323,7 +323,14 @@ def is_available() -> bool:
 
 def is_keyring_available() -> bool:
     """Check if keyring (Windows Credential Manager) is available."""
-    return _KEYRING_AVAILABLE
+    if not _KEYRING_AVAILABLE:
+        return False
+    try:
+        # Importing keyring is not enough: a backend may be unavailable.
+        keyring.get_keyring().get_password(_KEYRING_SERVICE, "__availability_probe__")
+        return True
+    except Exception:
+        return False
 
 
 # ------------------------------------------------------------------
@@ -335,64 +342,64 @@ class SecureCrypto:
     High-level cryptographic interface for secure data encryption.
     Uses AES-256-GCM for authenticated encryption with unique IV per operation.
     """
-    
+
     IV_LENGTH = 12  # 96 bits for GCM (recommended)
-    
+
     @classmethod
     def generate_iv(cls, length: int = IV_LENGTH) -> bytes:
         """Generate a cryptographically secure random IV."""
         return secrets.token_bytes(length)
-    
+
     @classmethod
     def encrypt_data(cls, plaintext: SecureBytes, key: bytes) -> bytes:
         """
         Encrypt data using AES-256-GCM with a unique IV.
-        
+
         Format: [IV (12 bytes)][ciphertext + auth_tag]
-        
+
         Args:
             plaintext: Data to encrypt as SecureBytes
             key: 32-byte encryption key
-            
+
         Returns:
             Encrypted data with IV prepended
         """
         if not _CRYPTO_AVAILABLE:
             raise RuntimeError("cryptography nicht installiert.")
-        
+
         iv = cls.generate_iv()
         aesgcm = AESGCM(key)
-        
+
         data = plaintext.get_bytes()
         if data is None:
             raise ValueError("Data cannot be empty")
-        
+
         ciphertext = aesgcm.encrypt(iv, data, None)
         return iv + ciphertext
-    
+
     @classmethod
     def decrypt_data(cls, encrypted_data: bytes, key: bytes) -> SecureBytes:
         """
         Decrypt data encrypted with encrypt_data.
-        
+
         Args:
             encrypted_data: Encrypted data with IV prepended
             key: 32-byte encryption key
-            
+
         Returns:
             Decrypted data as SecureBytes
         """
         if not _CRYPTO_AVAILABLE:
             raise RuntimeError("cryptography nicht installiert.")
-        
+
         if len(encrypted_data) < cls.IV_LENGTH:
             raise ValueError("Invalid encrypted data: too short")
-        
+
         iv = encrypted_data[:cls.IV_LENGTH]
         ciphertext = encrypted_data[cls.IV_LENGTH:]
-        
+
         aesgcm = AESGCM(key)
-        
+
         try:
             plaintext = aesgcm.decrypt(iv, ciphertext, None)
             return SecureBytes(plaintext)
@@ -404,12 +411,12 @@ class KeyManager:
     """
     Manages encryption keys with secure storage and derivation.
     """
-    
+
     def __init__(self):
         self._master_key: Optional[bytes] = None
         self._key_salt: Optional[bytes] = None
         self._derived_keys: dict = {}
-    
+
     def initialize_with_password(
         self,
         password: SecureBytes,
@@ -418,12 +425,12 @@ class KeyManager:
     ) -> Tuple[bytes, bytes]:
         """
         Initialize the key manager with a master password.
-        
+
         Args:
             password: Master password
             salt: Optional existing salt
             use_argon2: Use Argon2id instead of PBKDF2
-            
+
         Returns:
             Tuple of (derived_key, salt)
         """
@@ -431,12 +438,12 @@ class KeyManager:
             key, salt = derive_key_argon2(password, salt)
         else:
             key, salt = derive_key_pbkdf2_secure(password, salt)
-        
+
         self._master_key = key
         self._key_salt = salt
-        
+
         return key, salt
-    
+
     def verify_password(
         self,
         password: SecureBytes,
@@ -445,12 +452,12 @@ class KeyManager:
     ) -> bool:
         """
         Verify a master password against the stored salt.
-        
+
         Args:
             password: Password to verify
             salt: Stored salt
             use_argon2: Use Argon2id
-            
+
         Returns:
             True if password is correct
         """
@@ -459,55 +466,55 @@ class KeyManager:
                 key, _ = derive_key_argon2(password, salt)
             else:
                 key, _ = derive_key_pbkdf2_secure(password, salt)
-            
+
             if self._master_key is None:
                 return False
-            
+
             return hmac.compare_digest(key, self._master_key)
         except Exception:
             return False
-    
+
     def get_master_key(self) -> Optional[bytes]:
         """Get the master key (for internal use only)."""
         return self._master_key
-    
+
     def get_salt(self) -> Optional[bytes]:
         """Get the key derivation salt."""
         return self._key_salt
-    
+
     def derive_connection_key(self, connection_id: str) -> bytes:
         """
         Derive a unique key for a specific connection.
-        
+
         Args:
             connection_id: Unique identifier for the connection
-            
+
         Returns:
             Derived key for the connection
         """
         if self._master_key is None:
             raise ValueError("Master key not initialized")
-        
+
         if connection_id not in self._derived_keys:
             # Use HKDF-like derivation
             hasher = hmac.new(self._master_key, digestmod=hashlib.sha256)
             hasher.update(connection_id.encode('utf-8'))
             hasher.update(b'connection-key-v1')
             self._derived_keys[connection_id] = hasher.digest()
-        
+
         return self._derived_keys[connection_id]
-    
+
     def clear(self) -> None:
         """Clear all keys from memory."""
         if self._master_key is not None:
             key_array = bytearray(self._master_key)
             secure_wipe_bytes(key_array)
             self._master_key = None
-        
+
         for key in self._derived_keys.values():
             key_array = bytearray(key)
             secure_wipe_bytes(key_array)
-        
+
         self._derived_keys.clear()
         self._key_salt = None
 
